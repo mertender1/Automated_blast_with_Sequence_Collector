@@ -1,0 +1,28 @@
+# --- Directory and File Paths ---
+paths:
+  db_fasta: "make_db/txid2559587_clustered.faa"
+  outdir: "results"
+  initial_query: "test/orthosPB1_fromtree.fasta"
+  #If this file is not provided, only the downloaded database will be used.
+  extra_faa: "test/Add_removed_seq.faa"
+
+database:
+  taxid_list_file: "ids.txt"
+  ncbi_api_key: "143e5c5aac4643ef00d0099eb25d00ec9e09"
+  # Space-separated list of TaxIDs to exclude
+  exclude_taxids: "2697049 2955291 11676 3052230 3049954 10407 11520 3432193 11723"
+
+params:
+  use_clustered_db: True
+  max_rounds: 5
+  max_seqs: 400
+  cdhit_id: 0.95
+  blast:
+    evalue: 1e-10
+    outfmt: "6 qseqid sseqid evalue"
+    threads: 4
+  mmseqs:
+    identity: 0.80
+    coverage: 0.80
+    sensitivity: 7.5
+    cov_mode: 1

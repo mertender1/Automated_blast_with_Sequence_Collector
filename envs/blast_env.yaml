@@ -1,0 +1,16 @@
+name: blast_env
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python
+  - entrez-direct=16.2
+  - blast=2.15.0
+  - cd-hit=4.8.1
+  - mmseqs2=15.6f452
+  - seqkit=2.8.1
+  - jq=1.7.1
+  - curl
+  - grep
+  - unzip

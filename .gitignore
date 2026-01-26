@@ -1,0 +1,8 @@
+make_db/
+results/
+
+.snakemake/
+conda/
+
+*.fna
+*.gz
