@@ -8,7 +8,7 @@ paths:
 
 database:
   taxid_list_file: "ids.txt"
-  ncbi_api_key: "143e5c5aac4643ef00d0099eb25d00ec9e09"
+  ncbi_api_key: "Add_your_key"
   # Space-separated list of TaxIDs to exclude
   exclude_taxids: "2697049 2955291 11676 3052230 3049954 10407 11520 3432193 11723"
 
@@ -25,4 +25,5 @@ params:
     identity: 0.80
     coverage: 0.80
     sensitivity: 7.5
+
     cov_mode: 1
