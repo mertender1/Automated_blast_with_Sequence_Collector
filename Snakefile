@@ -62,12 +62,14 @@ rule download_and_filter_db:
     params:
         excludes = config["database"]["exclude_taxids"],
         api_key = config["database"]["ncbi_api_key"],
-        tmp_dir = os.path.join(DB_DIR, "tmp_download")
+        tmp_dir = os.path.join(DB_DIR, "tmp_download"),
+        chunks_dir = os.path.join(DB_DIR, "chunks_fasta") # Ensure this is defined
     conda: "envs/blast_env.yaml"
     shell:
         """
         export NCBI_API_KEY={params.api_key}
         mkdir -p {params.tmp_dir}
+        mkdir -p {params.chunks_dir}
         
         # 1. Build Query
         EX_QUERY="("
@@ -87,42 +89,53 @@ rule download_and_filter_db:
         TOTAL_IDS=$(wc -l < {params.tmp_dir}/clean_ids.txt)
         echo "Found ${{TOTAL_IDS}} clean accessions."
 
-        # 3. Split the file into chunks of 500 lines to ensure the loop never 'loses' its place
-        mkdir -p {params.tmp_dir}/chunks
-        split -l 500 {params.tmp_dir}/clean_ids.txt {params.tmp_dir}/chunks/batch_
+        # 3. Split the file into chunks of 500 lines
+        mkdir -p {params.tmp_dir}/id_chunks
+        split -l 500 {params.tmp_dir}/clean_ids.txt {params.tmp_dir}/id_chunks/batch_
         
-        # 4. Process each chunk file
-        > {output.full_fasta}
-        BATCHES=$(ls {params.tmp_dir}/chunks/batch_*)
-        COUNT=0
+        # 4. Process each chunk file with header count validation
+        BATCHES=$(ls {params.tmp_dir}/id_chunks/batch_*)
         for batch_file in $BATCHES; do
-            # Convert the 500 IDs in this file into a comma-separated list
+            batch_name=$(basename "$batch_file")
             id_list=$(tr '\\n' ',' < "$batch_file" | sed 's/,$//')
+            EXPECTED_COUNT=$(wc -l < "$batch_file")
             
             success=false
             attempt=1
             while [ "$success" = false ] && [ $attempt -le 3 ]; do
-                efetch -db protein -id "$id_list" -format fasta >> {output.full_fasta} && success=true || success=false
-                if [ "$success" = false ]; then
-                    echo "Batch failed at ${{COUNT}}. Retry $attempt..."
+                # Download (Overwrites if previous attempt was partial)
+                efetch -db protein -id "$id_list" -format fasta > {params.chunks_dir}/seq_${{batch_name}}.fasta
+                
+                # Count headers (">") to verify integrity
+                ACTUAL_COUNT=$(grep -c ">" {params.chunks_dir}/seq_${{batch_name}}.fasta || echo 0)
+                
+                if [ "$ACTUAL_COUNT" -ge "$EXPECTED_COUNT" ]; then
+                    success=true
+                else
+                    echo "Batch ${{batch_name}} mismatch: Got ${{ACTUAL_COUNT}}, expected ${{EXPECTED_COUNT}}. Retry $attempt/3..."
                     sleep 5
                     attempt=$((attempt+1))
                 fi
             done
-            
-            COUNT=$((COUNT + 500))
-            # Print progress every 5000 sequences so the log doesn't get too long
-            if (( COUNT % 5000 == 0 )); then
-                echo "Progress: $COUNT / $TOTAL_IDS"
+
+            if [ "$success" = false ]; then
+                echo "CRITICAL: Batch ${{batch_name}} failed after 3 attempts. Exiting."
+                exit 1
             fi
+            
             sleep 0.3
         done
+
+        # 5. All batches verified. Combine them now.
+        echo "--- Combining chunks into {output.full_fasta} ---"
+        cat {params.chunks_dir}/seq_*.fasta > {output.full_fasta}
 
         echo "--- Deduplicating ---"
         seqkit rmdup -s {output.full_fasta} -o {output.filtered_fasta}
         
-        # Cleanup chunks
-        rm -rf {params.tmp_dir}/chunks
+        # Cleanup
+        rm -rf {params.tmp_dir}/id_chunks
+        rm -rf {params.chunks_dir}
         """
 
 # 1.5 MERGE EXTRA SEQUENCES
